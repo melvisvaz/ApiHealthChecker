@@ -1,0 +1,39 @@
+﻿<Window x:Class="APIHealthCheck.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="API Health Monitor"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal"
+                    Margin="8"
+                    Grid.Row="0"
+                    VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Margin="0,0,8,0">Environment:</TextBlock>
+            <ComboBox x:Name="EnvCombo"
+                      Width="120"
+                      SelectionChanged="EnvCombo_SelectionChanged"/>
+        </StackPanel>
+
+        <DataGrid x:Name="ApiGrid"
+                  AutoGenerateColumns="False"
+                  ItemsSource="{Binding}"
+                  Grid.Row="1"
+                  Margin="8">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="API Name"
+                                    Binding="{Binding Name}"
+                                    Width="*"/>
+                <DataGridTextColumn Header="Status"
+                                    Binding="{Binding Status}"
+                                    Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</Window>
