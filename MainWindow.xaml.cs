@@ -38,25 +38,12 @@ namespace APIHealthCheck
         {
             _isInitializing = true;
             // Load environments from configuration (if present)
-            var envsSection = _configuration.GetSection("Environments");
-            string[]? envs = null;
-            if (envsSection.Exists())
-            {
-                envs = envsSection.Get<string[]>();
-            }
-            else
-            {
-                // Discover top-level environment sections that contain ApiEndpoints
-                envs = _configuration.GetChildren()
-                    .Where(s => s.GetSection("ApiEndpoints").Exists())
-                    .Select(s => s.Key)
-                    .ToArray();
-            }
+            // Discover top-level environment sections that contain ApiEndpoints
+            var envs = _configuration.GetChildren()
+                     .Where(s => s.GetSection("ApiEndpoints").Exists())
+                     .Select(s => s.Key)
+                     .ToArray();
 
-            if (envs == null || envs.Length == 0)
-            {
-                envs = new string[] { "dev", "UAT" };
-            }
 
             EnvCombo.ItemsSource = envs;
 
@@ -75,7 +62,7 @@ namespace APIHealthCheck
 
             // Initial load (suppress selection-changed during this setup)
             await ReloadApisForSelectedEnvironment();
-            ApiGrid.DataContext = _checker.ApiStatuses;
+            // ItemsSource is set by ReloadApisForSelectedEnvironment; no need to set DataContext here
 
             _isInitializing = false;
         }
@@ -84,16 +71,40 @@ namespace APIHealthCheck
         {
             var sel = EnvCombo.SelectedItem as string ?? string.Empty;
             _checker.SetEnvironment(sel);
-            await _checker.LoadAndCheckApisAsync();
-            // Refresh binding
+            // Clear previous statuses and bind immediately so the grid shows quickly
+            _checker.ApiStatuses.Clear();
             ApiGrid.ItemsSource = null;
             ApiGrid.ItemsSource = _checker.ApiStatuses;
+
+            // Reset progress UI
+            ApiProgressBar.Value = 0;
+            ProgressText.Text = string.Empty;
+
+            var progress = new Progress<ApiHealthChecker.ApiProgress>(p =>
+            {
+                // Update collection and progress UI on UI thread
+                _checker.ApiStatuses.Add(p.Status);
+                if (p.Total > 0)
+                {
+                    var percent = (double)p.Completed / p.Total * 100.0;
+                    ApiProgressBar.Value = percent;
+                    ProgressText.Text = $"{p.Completed}/{p.Total}";
+                }
+            });
+
+            await _checker.LoadAndCheckApisAsync(progress);
         }
 
         private async void EnvCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // If we're initializing, ignore selection changes
+            if (_isInitializing) return;
             if (!IsLoaded) return; // avoid firing before window finished loading
-            if (_isInitializing) return; // suppressed during initial setup
+
+            // Only reload when selection actually changed to a different environment
+            var sel = EnvCombo.SelectedItem as string ?? string.Empty;
+            if (string.Equals(sel, _checker.Environment, System.StringComparison.OrdinalIgnoreCase)) return;
+
             await ReloadApisForSelectedEnvironment();
         }
 

@@ -20,11 +20,14 @@ namespace APIHealthCheck
 
         public ObservableCollection<ApiStatus> ApiStatuses { get; set; } = new();
 
-        public async Task LoadAndCheckApisAsync()
+        public record ApiProgress(ApiStatus Status, int Completed, int Total);
+
+        public async Task LoadAndCheckApisAsync(IProgress<ApiProgress>? progress = null)
         {
             var config = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: true)
+                // The repository uses appSettings.json (capital S) so read that file
+                .AddJsonFile("appSettings.json", optional: true)
                 .Build();
 
             var endpoints = new List<ApiStatus>();
@@ -81,24 +84,42 @@ namespace APIHealthCheck
                 }
             }
 
-            // Clear any previous results when reloading for a different environment
-            ApiStatuses.Clear();
+            // We'll perform checks in parallel and report results as they complete.
+            // Do not mutate ApiStatuses from background threads; the caller should
+            // bind to ApiStatuses and add items when progress reports them.
 
+            var checkTasks = new List<Task<ApiStatus>>();
             foreach (var api in endpoints)
             {
-                var client = new RestClient(api.Url);
-                var request = new RestRequest();
-                try
+                // Capture local copy to avoid closure issues
+                var apiCopy = new ApiStatus { Name = api.Name, Url = api.Url };
+                checkTasks.Add(Task.Run(async () =>
                 {
-                    var response = await client.ExecuteAsync(request);
-                    api.Status = response.IsSuccessful ? "Healthy" : "Unhealthy";
-                }
-                catch
-                {
-                    api.Status = "Unhealthy";
-                }
+                    var client = new RestClient(apiCopy.Url);
+                    var request = new RestRequest();
+                    try
+                    {
+                        var response = await client.ExecuteAsync(request);
+                        apiCopy.Status = response.IsSuccessful ? "Healthy" : "Unhealthy";
+                    }
+                    catch
+                    {
+                        apiCopy.Status = "Unhealthy";
+                    }
+                    return apiCopy;
+                }));
+            }
 
-                ApiStatuses.Add(api);
+            // Process tasks as they complete and report each result via IProgress
+            var total = checkTasks.Count;
+            var completed = 0;
+            while (checkTasks.Count > 0)
+            {
+                var finished = await Task.WhenAny(checkTasks);
+                checkTasks.Remove(finished);
+                var result = await finished;
+                completed++;
+                progress?.Report(new ApiProgress(result, completed, total));
             }
         }
     }

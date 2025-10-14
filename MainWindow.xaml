@@ -19,6 +19,18 @@
             <ComboBox x:Name="EnvCombo"
                       Width="120"
                       SelectionChanged="EnvCombo_SelectionChanged"/>
+            <ProgressBar x:Name="ApiProgressBar"
+                         Width="200"
+                         Height="16"
+                         Margin="12,0,0,0"
+                         VerticalAlignment="Center"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0"/>
+            <TextBlock x:Name="ProgressText"
+                       Margin="8,0,0,0"
+                       VerticalAlignment="Center"
+                       Text=""/>
         </StackPanel>
 
         <DataGrid x:Name="ApiGrid"
